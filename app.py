@@ -23,7 +23,14 @@ def get_setting(name, default=None):
 NIM_API_KEY = get_setting("API_KEY")                                            # NVIDIA NIM key (nvapi-...), kept in Streamlit secrets
 NIM_API_BASE = get_setting("API_BASE", "https://integrate.api.nvidia.com/v1")
 LLM_MODEL = "openai/gpt-oss-20b"                                                # Chat model served by NVIDIA NIM
-EMBEDDING_MODEL = "nvidia/nv-embedqa-e5-v5"                                     # Embedding model served by NVIDIA NIM
+EMBEDDING_MODEL = "nvidia/llama-3.2-nv-embedqa-1b-v1"                                     # Embedding model served by NVIDIA NIM
+
+st.title("LLM-Powered Research Assistant")
+
+# Stop with a clear message if the key is missing (OpenAI() would otherwise crash with a redacted error)
+if not NIM_API_KEY:
+    st.error("API_KEY is not set. In Streamlit Cloud open Manage app > Settings > Secrets and add: API_KEY = \"nvapi-...\"")
+    st.stop()
 
 # Initialize OpenAI-compatible client pointing at NVIDIA NIM
 client = OpenAI(api_key=NIM_API_KEY, base_url=NIM_API_BASE)
@@ -171,19 +178,16 @@ def generate_rag_response(user_input, retriever, max_tokens=3000, temperature=0.
 
 
 # Streamlit App
-st.title("LLM-Powered Research Assistant")
-
-if not NIM_API_KEY:
-    st.error("API_KEY is not set. Add your NVIDIA NIM key as a secret named API_KEY.")
-    st.stop()
-
 uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
 
 retriever = None
 if uploaded_files:
     st.info("Processing uploaded PDFs...")
-    retriever = load_and_process_pdfs(uploaded_files)
-    st.success("PDFs processed and ready for questioning!")
+    try:
+        retriever = load_and_process_pdfs(uploaded_files)
+        st.success("PDFs processed and ready for questioning!")
+    except Exception as e:                                                      # Streamlit Cloud redacts uncaught errors, so show the real reason
+        st.error(f"Could not process the PDFs ({type(e).__name__}): {e}")
 
 
 if retriever:
