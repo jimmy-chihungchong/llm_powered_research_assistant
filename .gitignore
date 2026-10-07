@@ -1,0 +1,16 @@
+# Secrets - never commit API keys
+config.json
+.streamlit/secrets.toml
+
+# Python / environment
+__pycache__/
+*.pyc
+.venv/
+ai_env/
+
+# Notebook checkpoints and local vector store
+.ipynb_checkpoints/
+chroma/
+
+# Not needed for Streamlit Community Cloud
+Dockerfile
