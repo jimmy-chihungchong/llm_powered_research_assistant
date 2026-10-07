@@ -4,6 +4,9 @@ A Retrieval-Augmented Generation (RAG) prototype that lets researchers upload sc
 
 Built as part of *AI Agents for Business Applications* (Prompt Engineering and RAG, Week 1). The case study uses four papers on prompt engineering (GPT-3, AutoPrompt, Prompt Tuning, Prompt Programming).
 
+## Streamlit live link
+https://llmpoweredresearchassistant-iqxddxqw6vxhhfeemqr42q.streamlit.app/
+
 ## How it works
 
 1. **Load**: PDF text is extracted page by page with PyMuPDF.
