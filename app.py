@@ -24,15 +24,17 @@ NIM_API_KEY = get_setting("API_KEY")                                            
 NIM_API_BASE = get_setting("API_BASE", "https://integrate.api.nvidia.com/v1")
 LLM_MODEL = "openai/gpt-oss-20b"                                                # Chat model served by NVIDIA NIM
 # Embedding models to try in order: the first one that your NIM account can actually call is used
+# (older models such as nv-embedqa-e5-v5, nv-embed-v1 and bge-m3 have reached end of life on NIM)
 EMBEDDING_CANDIDATES = [
+    "nvidia/nemotron-3-embed-1b",
+    "nvidia/llama-nemotron-embed-vl-1b-v2",
+    "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
     "nvidia/llama-3.2-nv-embedqa-1b-v1",
-    "nvidia/nv-embedqa-e5-v5",
     "nvidia/nv-embedqa-mistral-7b-v2",
-    "nvidia/nv-embed-v1",
-    "baai/bge-m3",
     "snowflake/arctic-embed-l",
     "nvidia/embed-qa-4",
 ]
+LOCAL_EMBEDDING = "local"                                                       # Last resort: Chroma's built-in ONNX MiniLM model, runs inside the app, no API needed
 
 st.title("LLM-Powered Research Assistant")
 
@@ -116,6 +118,20 @@ Here are some excerpts from research papers, each preceded by a metadata header 
 """
 
 
+class LocalEmbeddings(Embeddings):
+    """Fallback embeddings that run inside the app (Chroma's default all-MiniLM-L6-v2 ONNX model)."""
+
+    def __init__(self):
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        self.fn = DefaultEmbeddingFunction()
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return [[float(x) for x in v] for v in self.fn(texts)]
+
+    def embed_query(self, text: str) -> List[float]:
+        return self.embed_documents([text])[0]
+
+
 @st.cache_resource
 def pick_embedding_model():
     # Listing a model on build.nvidia.com does not guarantee that this account can call it, so test each one
@@ -127,7 +143,13 @@ def pick_embedding_model():
             return name
         except Exception as e:
             errors.append(f"{name}: {type(e).__name__} {str(e)[:150]}")
-    raise RuntimeError("No embedding model is available for this API key:\n" + "\n".join(errors))
+    st.warning("No NIM embedding model is available for this API key, so a built-in local model is used instead.")
+    return LOCAL_EMBEDDING
+
+
+def build_embeddings():
+    model = pick_embedding_model()
+    return LocalEmbeddings() if model == LOCAL_EMBEDDING else NIMEmbeddings(model)
 
 
 @st.cache_resource
@@ -156,7 +178,7 @@ def load_and_process_pdfs(uploaded_files):
     # Create an in-memory vector store (or use a persistent one if needed)
     vectorstore = Chroma.from_documents(
         document_chunks,
-        NIMEmbeddings(pick_embedding_model())
+        build_embeddings()
     )
     return vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 

@@ -15,7 +15,7 @@ Built as part of *AI Agents for Business Applications* (Prompt Engineering and R
 | Component | Notebook (local) | Streamlit app (online) |
 |---|---|---|
 | Chat model | `openai/gpt-oss-20b` via LM Studio | `openai/gpt-oss-20b` via NVIDIA NIM |
-| Embeddings | `nomic-embed-text-v1.5` via LM Studio | first NIM embedding model your key can call (tries `nvidia/llama-3.2-nv-embedqa-1b-v1` first) |
+| Embeddings | `nomic-embed-text-v1.5` via LM Studio | first NIM embedding model your key can call (tries `nvidia/nemotron-3-embed-1b` first, then falls back to a built-in local model) |
 | Vector store | Chroma | Chroma |
 | Citation details | Curated dictionary for the four papers | PDF metadata, falling back to the file name |
 
