@@ -23,7 +23,16 @@ def get_setting(name, default=None):
 NIM_API_KEY = get_setting("API_KEY")                                            # NVIDIA NIM key (nvapi-...), kept in Streamlit secrets
 NIM_API_BASE = get_setting("API_BASE", "https://integrate.api.nvidia.com/v1")
 LLM_MODEL = "openai/gpt-oss-20b"                                                # Chat model served by NVIDIA NIM
-EMBEDDING_MODEL = "nvidia/llama-3.2-nv-embedqa-1b-v1"                                     # Embedding model served by NVIDIA NIM
+# Embedding models to try in order: the first one that your NIM account can actually call is used
+EMBEDDING_CANDIDATES = [
+    "nvidia/llama-3.2-nv-embedqa-1b-v1",
+    "nvidia/nv-embedqa-e5-v5",
+    "nvidia/nv-embedqa-mistral-7b-v2",
+    "nvidia/nv-embed-v1",
+    "baai/bge-m3",
+    "snowflake/arctic-embed-l",
+    "nvidia/embed-qa-4",
+]
 
 st.title("LLM-Powered Research Assistant")
 
@@ -39,7 +48,8 @@ client = OpenAI(api_key=NIM_API_KEY, base_url=NIM_API_BASE)
 class NIMEmbeddings(Embeddings):
     """Embeddings via NVIDIA NIM. The e5 retrieval models need input_type='passage' for documents and 'query' for questions."""
 
-    def __init__(self, batch_size: int = 32):
+    def __init__(self, model: str, batch_size: int = 32):
+        self.model = model
         self.batch_size = batch_size
 
     def _embed(self, texts: List[str], input_type: str) -> List[List[float]]:
@@ -47,7 +57,7 @@ class NIMEmbeddings(Embeddings):
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i:i + self.batch_size]
             result = client.embeddings.create(
-                model=EMBEDDING_MODEL,
+                model=self.model,
                 input=batch,
                 encoding_format="float",
                 extra_body={"input_type": input_type, "truncate": "END"},
@@ -107,6 +117,20 @@ Here are some excerpts from research papers, each preceded by a metadata header 
 
 
 @st.cache_resource
+def pick_embedding_model():
+    # Listing a model on build.nvidia.com does not guarantee that this account can call it, so test each one
+    errors = []
+    for name in EMBEDDING_CANDIDATES:
+        try:
+            client.embeddings.create(model=name, input=["test"], encoding_format="float",
+                                     extra_body={"input_type": "query", "truncate": "END"})
+            return name
+        except Exception as e:
+            errors.append(f"{name}: {type(e).__name__} {str(e)[:150]}")
+    raise RuntimeError("No embedding model is available for this API key:\n" + "\n".join(errors))
+
+
+@st.cache_resource
 def load_and_process_pdfs(uploaded_files):
     all_documents = []
     for uploaded_file in uploaded_files:
@@ -132,7 +156,7 @@ def load_and_process_pdfs(uploaded_files):
     # Create an in-memory vector store (or use a persistent one if needed)
     vectorstore = Chroma.from_documents(
         document_chunks,
-        NIMEmbeddings()
+        NIMEmbeddings(pick_embedding_model())
     )
     return vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
